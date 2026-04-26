@@ -12,7 +12,6 @@ STAGE_CHECKPOINTS = {
     "cleaner":           ["/home/user/cleaned_data.csv"],
     "feature_engineer":  ["/home/user/featured_data.csv"],
     "modeler":           ["/home/user/best_model.joblib", "/home/user/preprocessor.joblib"],
-    "deployer":          [],  # deployer downloads to local outputs/ itself
 }
 
 

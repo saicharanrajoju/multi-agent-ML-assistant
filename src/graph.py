@@ -24,7 +24,7 @@ def validated_profiler_node(state: AgentState, config=None) -> dict:
 
 def critic_node_with_cleanup(state: AgentState, config=None) -> dict:
     """Wraps critic_node and closes the sandbox when the pipeline is finishing."""
-    result = critic_node(state, config)
+    result = critic_node(state)
     # Close sandbox only when critic won't iterate further
     will_finish = not result.get("should_iterate", False) or (state.get("iteration_count", 0) + 1) >= 3
     if will_finish:

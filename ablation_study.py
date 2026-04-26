@@ -9,7 +9,6 @@ from src.agents.profiler import validated_profiler_node
 from src.agents.cleaner import cleaner_node
 from src.agents.feature_eng import feature_engineer_node
 from src.agents.modeler import modeler_node
-from src.agents.deployer import deployer_node
 
 def extract_metrics(state: dict) -> dict:
     """Extract model metrics from state's visualization_data or fallback to regex on model_result."""
@@ -80,7 +79,6 @@ def run_pipeline(dataset_path: str, goal: str, with_critic: bool, thread_id: str
         "cleaning_approved": False,
         "feature_approved": False,
         "model_approved": False,
-        "deployment_approved": False,
         "human_feedback": "",
         "error": "",
         "problem_type": "binary_classification",
@@ -103,15 +101,13 @@ def run_pipeline(dataset_path: str, goal: str, with_critic: bool, thread_id: str
             return {"should_iterate": False, "iteration_count": 0}
             
         custom_workflow.add_node("critic", passthrough_critic)
-        custom_workflow.add_node("deployer", deployer_node)
 
         custom_workflow.add_edge(START, "profiler")
         custom_workflow.add_edge("profiler", "cleaner")
         custom_workflow.add_edge("cleaner", "feature_engineer")
         custom_workflow.add_edge("feature_engineer", "modeler")
         custom_workflow.add_edge("modeler", "critic")
-        custom_workflow.add_edge("critic", "deployer")
-        custom_workflow.add_edge("deployer", END)
+        custom_workflow.add_edge("critic", END)
         
         # Compile WITHOUT interrupt_before to auto-approve
         graph = custom_workflow.compile(checkpointer=memory)

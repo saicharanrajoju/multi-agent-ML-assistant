@@ -2,7 +2,7 @@ import os
 import re
 
 base_dir = "/Users/saicharanrajoju/Desktop/final project/ml-agent-assistant/src/agents"
-agents = ["profiler.py", "cleaner.py", "feature_eng.py", "modeler.py", "critic.py", "deployer.py"]
+agents = ["profiler.py", "cleaner.py", "feature_eng.py", "modeler.py", "critic.py"]
 
 # Fix magic numbers
 MAGIC_CONSTS = {
@@ -47,7 +47,7 @@ for agent in agents:
         content = content.replace("({max_iterations})", "({MAX_ITERATIONS})")
         content = content.replace("[:5]", "[:MAX_SUGGESTIONS]")
 
-    if agent in ["deployer.py", "modeler.py", "cleaner.py", "feature_eng.py"]:
+    if agent in ["modeler.py", "cleaner.py", "feature_eng.py"]:
         # Handle EXCEPT: and EXCEPT EXCEPTION:
         # In strings, usually we use except ValueError or TypeError. In normal code, json.JSONDecodeError or OSError
         # Let's just do a blanket EXCEPT EXCEPTION AS E -> EXCEPT EXCEPTION AS E for now? No, user wants specific.

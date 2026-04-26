@@ -167,7 +167,7 @@ def render_diagnosis_panel(state: dict, project_root: str):
         unsafe_allow_html=True,
     )
 
-    if st.button("Save full results report", type="primary", use_container_width=True):
+    if st.button("Save full results report", type="primary", width="stretch"):
         with st.spinner("Saving..."):
             try:
                 path, json_str = save_pipeline_report(state, project_root)
@@ -193,5 +193,5 @@ def render_diagnosis_panel(state: dict, project_root: str):
             data=json_str,
             file_name=os.path.basename(path),
             mime="application/json",
-            use_container_width=True,
+            width="stretch",
         )

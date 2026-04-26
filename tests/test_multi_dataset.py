@@ -93,9 +93,6 @@ def run_test():
                     updates = {"feature_approved": True}
                 elif next_node == "modeler":
                     updates = {"model_approved": True}
-                elif next_node == "deployer":
-                    updates = {"deployment_approved": True}
-                
                 if updates:
                     graph.update_state(config, updates)
                 

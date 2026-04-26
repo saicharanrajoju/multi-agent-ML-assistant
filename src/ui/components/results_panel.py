@@ -380,7 +380,7 @@ def render_results_panel(state_vals: dict, project_root: str):
                         font=dict(family="Inter, sans-serif", size=11, color="#3B2314"),
                         margin=dict(l=0, r=60, t=8, b=0),
                     )
-                    st.plotly_chart(fig_corr, use_container_width=True)
+                    st.plotly_chart(fig_corr, width="stretch")
 
             # ── 6. Issues ─────────────────────────────────────────────────────
             if issues:
@@ -524,7 +524,7 @@ def render_results_panel(state_vals: dict, project_root: str):
                             f'{len(_df_clean):,} rows × {_df_clean.shape[1]} columns after cleaning</p>',
                             unsafe_allow_html=True,
                         )
-                        st.dataframe(_df_clean.head(50), use_container_width=True, hide_index=True)
+                        st.dataframe(_df_clean.head(50), width="stretch", hide_index=True)
                         _clean_csv_bytes = _df_clean.to_csv(index=False).encode()
                         st.download_button(
                             "Download cleaned dataset (.csv)",
@@ -663,7 +663,7 @@ def render_results_panel(state_vals: dict, project_root: str):
                             tickfont=dict(color="#3B2314"),
                             title=dict(text="r", font=dict(color="#3B2314", size=10)),
                         ))
-                        st.plotly_chart(fig_heat, use_container_width=True)
+                        st.plotly_chart(fig_heat, width="stretch")
                 except Exception:
                     pass
         else:
@@ -1000,7 +1000,7 @@ def render_results_panel(state_vals: dict, project_root: str):
                     yaxis=_ax(showgrid=False),
                     **_CHART_LAYOUT,
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
             # Model comparison chart
             if "model_comparison" in viz_data:
@@ -1033,7 +1033,7 @@ def render_results_panel(state_vals: dict, project_root: str):
                                 xaxis=_ax(showgrid=False, tickangle=-35),
                                 height=320, **_CHART_LAYOUT,
                             )
-                            st.plotly_chart(fig_r2, use_container_width=True)
+                            st.plotly_chart(fig_r2, width="stretch")
                     with col_rmse:
                         rmse_vals = comparison.get("rmse", [])
                         if rmse_vals:
@@ -1051,7 +1051,7 @@ def render_results_panel(state_vals: dict, project_root: str):
                                 xaxis=_ax(showgrid=False, tickangle=-35),
                                 height=320, **_CHART_LAYOUT,
                             )
-                            st.plotly_chart(fig_rm, use_container_width=True)
+                            st.plotly_chart(fig_rm, width="stretch")
                 else:
                     fig = go.Figure()
                     metrics = ["accuracy", "precision", "recall", "f1_score", "auc_roc"]
@@ -1078,7 +1078,7 @@ def render_results_panel(state_vals: dict, project_root: str):
                                     font=dict(color="#3B2314", size=11)),
                         **_CHART_LAYOUT,
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width="stretch")
 
             col_left, col_right = st.columns(2)
 
@@ -1110,7 +1110,7 @@ def render_results_panel(state_vals: dict, project_root: str):
                             legend=dict(font=dict(color="#3B2314", size=10)),
                             height=380, **_CHART_LAYOUT,
                         )
-                        st.plotly_chart(fig_avp, use_container_width=True)
+                        st.plotly_chart(fig_avp, width="stretch")
                     else:
                         # Fallback: show metric tile when actuals/predictions not saved
                         r2_v   = bm_reg.get("r2")
@@ -1151,7 +1151,7 @@ def render_results_panel(state_vals: dict, project_root: str):
                                 **_CHART_LAYOUT,
                             )
                             fig_cm.update_traces(colorbar=dict(tickfont=dict(color="#3B2314")))
-                            st.plotly_chart(fig_cm, use_container_width=True)
+                            st.plotly_chart(fig_cm, width="stretch")
 
             with col_right:
                 if "cross_validation" in viz_data:
@@ -1192,7 +1192,7 @@ def render_results_panel(state_vals: dict, project_root: str):
                             height=380,
                             **_CHART_LAYOUT,
                         )
-                        st.plotly_chart(fig_cv, use_container_width=True)
+                        st.plotly_chart(fig_cv, width="stretch")
 
             # ── Residuals plot (regression only, full-width) ──────────────────
             if is_regression:
@@ -1218,7 +1218,7 @@ def render_results_panel(state_vals: dict, project_root: str):
                                   zeroline=True, zerolinecolor="#3B2314", zerolinewidth=1),
                         height=360, **_CHART_LAYOUT,
                     )
-                    st.plotly_chart(fig_res, use_container_width=True)
+                    st.plotly_chart(fig_res, width="stretch")
                     mean_res = sum(residuals) / len(residuals) if residuals else 0
                     max_abs  = max(abs(r) for r in residuals) if residuals else 1
                     if abs(mean_res) < 0.05 * max_abs:
@@ -1259,7 +1259,7 @@ def render_results_panel(state_vals: dict, project_root: str):
                         legend=dict(font=dict(color="#3B2314", size=11)),
                         height=380, **_CHART_LAYOUT,
                     )
-                    st.plotly_chart(fig_pr, use_container_width=True)
+                    st.plotly_chart(fig_pr, width="stretch")
                     if avg_prec is not None:
                         if avg_prec > 0.7:
                             st.markdown(banner(f"AP = {avg_prec:.3f} — strong precision-recall trade-off. Model reliably identifies positives.", kind="success"), unsafe_allow_html=True)
@@ -1312,7 +1312,7 @@ def render_results_panel(state_vals: dict, project_root: str):
                                 font=dict(color="#3B2314", size=11)),
                     height=380, **_CHART_LAYOUT,
                 )
-                st.plotly_chart(fig_lc, use_container_width=True)
+                st.plotly_chart(fig_lc, width="stretch")
                 # Bias/variance interpretation
                 final_train = train_mean[-1] if train_mean else 0
                 final_val   = val_mean[-1]   if val_mean   else 0
@@ -1493,7 +1493,7 @@ def render_results_panel(state_vals: dict, project_root: str):
                         height=max(300, 30 * len(names_sorted)),
                         **_CHART_LAYOUT,
                     )
-                    st.plotly_chart(fig_fi, use_container_width=True)
+                    st.plotly_chart(fig_fi, width="stretch")
 
             # Iteration comparison
             iteration_history = state_vals.get("iteration_history", [])
@@ -1530,7 +1530,7 @@ def render_results_panel(state_vals: dict, project_root: str):
                                     font=dict(color="#3B2314", size=11)),
                         **_CHART_LAYOUT,
                     )
-                    st.plotly_chart(fig_iter, use_container_width=True)
+                    st.plotly_chart(fig_iter, width="stretch")
 
                 metric_rows = []
                 for entry in iteration_history:
@@ -1560,7 +1560,7 @@ def render_results_panel(state_vals: dict, project_root: str):
                             "Best Model": bm.get("name", "N/A"),
                         })
                 import pandas as pd
-                st.dataframe(pd.DataFrame(metric_rows), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(metric_rows), width="stretch", hide_index=True)
 
             with st.expander("Raw training output & code"):
                 st.text(state_vals.get("model_result", ""))
@@ -1666,7 +1666,7 @@ def render_results_panel(state_vals: dict, project_root: str):
                         font=dict(family="Inter, sans-serif", size=12, color="#3B2314"),
                         margin=dict(l=0, r=60, t=8, b=0),
                     )
-                    st.plotly_chart(fig_sc, use_container_width=True)
+                    st.plotly_chart(fig_sc, width="stretch")
 
                     st.markdown(section_header("Dimension breakdown"), unsafe_allow_html=True)
                     for cat, val in zip(labels, values):

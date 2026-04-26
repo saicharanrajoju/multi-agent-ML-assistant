@@ -89,8 +89,8 @@ def render_pipeline_logs(
         )
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("Reset everything", key="err_reset", use_container_width=True):
+            if st.button("Reset everything", key="err_reset", width="stretch"):
                 on_reset()
         with c2:
-            if st.button("Retry last step", key="err_retry", use_container_width=True):
+            if st.button("Retry last step", key="err_retry", width="stretch"):
                 on_retry()

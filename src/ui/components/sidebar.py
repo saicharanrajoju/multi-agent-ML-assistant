@@ -69,7 +69,7 @@ def render_sidebar(datasets_dir: str, on_reset: Callable) -> str:
                         f'</div>',
                         unsafe_allow_html=True,
                     )
-                    st.dataframe(df_preview, height=120, use_container_width=True)
+                    st.dataframe(df_preview, height=120, width="stretch")
             except Exception:
                 pass
 
@@ -79,7 +79,7 @@ def render_sidebar(datasets_dir: str, on_reset: Callable) -> str:
             '<p style="font-size:0.72rem;color:var(--text-muted);margin:0 0 0.5rem">Danger zone</p>',
             unsafe_allow_html=True,
         )
-        if st.button("Reset everything", key="sidebar_reset", use_container_width=True):
+        if st.button("Reset everything", key="sidebar_reset", width="stretch"):
             on_reset()
 
     return dataset_path

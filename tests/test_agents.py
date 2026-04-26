@@ -1,5 +1,5 @@
 # Check if agents can be imported
-from src.agents import profiler, cleaner, feature_eng, modeler, critic, deployer
+from src.agents import profiler, cleaner, feature_eng, modeler, critic
 
 def test_imports():
     assert profiler
@@ -7,4 +7,3 @@ def test_imports():
     assert feature_eng
     assert modeler
     assert critic
-    assert deployer

@@ -547,5 +547,5 @@ except (FileNotFoundError, json.JSONDecodeError) as e:
         "scout_ranking": scout_ranking,
         "model_narration": model_narration,
         "pre_exec_corrections": pre_exec_corrections,
-        "human_feedback": "",  # clear so it doesn't bleed into critic/deployer
+        "human_feedback": "",  # clear so it doesn't bleed into critic
     }

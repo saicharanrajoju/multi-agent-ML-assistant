@@ -200,7 +200,7 @@ user_goal = st.text_area(
     height=88,
 )
 
-if st.button("Run Pipeline", type="primary", use_container_width=True, disabled=st.session_state.pipeline_running):
+if st.button("Run Pipeline", type="primary", width="stretch", disabled=st.session_state.pipeline_running):
     if not user_goal:
         st.error("Please enter a goal.")
     elif not dataset_path:

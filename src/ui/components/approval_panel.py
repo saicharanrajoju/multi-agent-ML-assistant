@@ -22,7 +22,6 @@ def render_approval_panel(
         "cleaner":          "Ready to clean data",
         "feature_engineer": "Ready to engineer features",
         "modeler":          "Ready to train models",
-        "deployer":         "Ready to deploy",
     }
     node_label = node_labels.get(next_node, next_node.replace("_", " ").title())
 
@@ -64,7 +63,7 @@ def render_approval_panel(
         if enc_map:
             with st.expander(f"Encoding strategy — {len(enc_map)} columns"):
                 enc_df_data = [{"Column": col, "Strategy": strategy} for col, strategy in enc_map.items()]
-                st.dataframe(enc_df_data, use_container_width=True, hide_index=True)
+                st.dataframe(enc_df_data, width="stretch", hide_index=True)
 
         feat_strats = rc.get("feature_strategies", [])
         if feat_strats:
@@ -265,11 +264,11 @@ def render_approval_panel(
 
     c1, c2, c3 = st.columns([2, 2, 1])
     with c1:
-        if st.button("Approve & continue", type="primary", use_container_width=True):
+        if st.button("Approve & continue", type="primary", width="stretch"):
             on_approve(feedback)
     with c2:
-        if st.button("Submit feedback & continue", use_container_width=True):
+        if st.button("Submit feedback & continue", width="stretch"):
             on_submit_feedback(feedback)
     with c3:
-        if st.button("Stop pipeline", use_container_width=True):
+        if st.button("Stop pipeline", width="stretch"):
             on_stop()

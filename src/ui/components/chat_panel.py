@@ -359,7 +359,7 @@ def render_chat_panel(state_vals: dict):
         cols = st.columns(2)
         for i, q in enumerate(suggested[:4]):
             with cols[i % 2]:
-                if st.button(q, key=f"sq_{i}", use_container_width=True):
+                if st.button(q, key=f"sq_{i}", width="stretch"):
                     st.session_state["chat_history"].append({"role": "user", "content": q})
                     st.rerun()
         st.markdown('<hr style="border:none;border-top:1px solid var(--border);margin:0.75rem 0">', unsafe_allow_html=True)

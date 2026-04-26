@@ -137,18 +137,6 @@ def show_review_info(state: dict, next_node: str):
         result = state.get("feature_result", "No result")
         print(result[:800] if len(result) > 800 else result)
     
-    elif next_node == "deployer":
-        print("\n🤖 MODEL TRAINING RESULTS:")
-        result = state.get("model_result", "No result")
-        print(result[:1000] if len(result) > 1000 else result)
-        print("\n🧐 CRITIC REPORT:")
-        critique = state.get("critique_report", "No critique")
-        print(critique[:800] if len(critique) > 800 else critique)
-        suggestions = state.get("improvement_suggestions", [])
-        if suggestions:
-            print(f"\n💡 Suggestions ({len(suggestions)}):")
-            for s in suggestions[:5]:
-                print(f"  - {s}")
 
 
 def print_final_summary(state: dict):
