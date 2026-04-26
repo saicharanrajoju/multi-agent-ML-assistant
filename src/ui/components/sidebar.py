@@ -57,7 +57,7 @@ def render_sidebar(datasets_dir: str, on_reset: Callable) -> str:
                 preview_path = os.path.join(datasets_dir, dataset_path)
                 if os.path.exists(preview_path):
                     df_preview = pd.read_csv(preview_path, nrows=3)
-                    total_rows = sum(1 for _ in open(preview_path)) - 1
+                    total_rows = sum(1 for _ in open(preview_path, encoding="utf-8", errors="replace")) - 1
                     st.markdown(
                         f'<div style="display:flex;gap:0.5rem;margin:0.75rem 0 0.4rem;flex-wrap:wrap">'
                         f'<span style="font-size:0.72rem;background:#F3F4F6;color:var(--text-sec);'

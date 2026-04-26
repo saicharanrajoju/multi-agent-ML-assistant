@@ -216,7 +216,7 @@ if st.button("Run Pipeline", type="primary", width="stretch", disabled=st.sessio
         try:
             _preview_path = os.path.join(datasets_dir, dataset_path)
             _df_check = pd.read_csv(_preview_path, nrows=500)
-            _total_rows = sum(1 for _ in open(_preview_path)) - 1
+            _total_rows = sum(1 for _ in open(_preview_path, encoding="utf-8", errors="replace")) - 1
             if _total_rows < 50:
                 _validation_error = f"Dataset too small ({_total_rows} rows). Need at least 50 rows to train a model."
             elif _total_rows > 100_000:

@@ -144,7 +144,7 @@ def save_pipeline_report(state: dict, project_root: str) -> tuple[str, str]:
     filename = f"pipeline_report_{int(time.time())}.json"
     path = os.path.join(output_dir, filename)
     json_str = json.dumps(report, indent=2, default=str)
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write(json_str)
     return path, json_str
 

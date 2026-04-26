@@ -49,7 +49,7 @@ def get_output_path(filename: str) -> str:
 def save_code_to_file(code: str, filename: str) -> str:
     """Save generated code to the outputs directory."""
     path = get_output_path(filename)
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write(code)
     print(f"💾 Code saved to {path}")
     return path
@@ -58,7 +58,7 @@ def save_code_to_file(code: str, filename: str) -> str:
 def save_report(report: str, filename: str) -> str:
     """Save a markdown report to the outputs directory."""
     path = get_output_path(filename)
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write(report)
     print(f"📄 Report saved to {path}")
     return path
