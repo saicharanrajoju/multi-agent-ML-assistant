@@ -12,6 +12,7 @@ This eliminates the whole class of load/save/split/target-leak bugs.
 """
 
 from __future__ import annotations
+import re
 
 
 def _MARKER_START(label: str) -> str:
@@ -263,7 +264,10 @@ TARGET_COL_NAME = '{target_col}'
 
 def assemble(preamble: str, llm_block: str, postamble: str) -> str:
     """Combine scaffold + LLM inner block + scaffold postamble."""
-    return preamble + "\n" + llm_block.strip() + "\n" + postamble
+    # Strip any markdown fences the LLM accidentally left in the block
+    cleaned = re.sub(r"```(?:python)?\s*\n?", "", llm_block)
+    cleaned = re.sub(r"\n?```", "", cleaned)
+    return preamble + "\n" + cleaned.strip() + "\n" + postamble
 
 
 def extract_inner_block(llm_code: str, label: str) -> str:
