@@ -5,5 +5,4 @@ outputs/
 .venv/
 node_modules/
 *.egg-info/
-datasets/*.csv
 .DS_Store
