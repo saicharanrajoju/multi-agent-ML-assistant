@@ -4,6 +4,12 @@ from src.agents.cleaner import cleaner_node
 # First run the profiler to get the state we need
 print("Step 1: Running profiler first to get data profile...")
 initial_state = {
+    "problem_type": "binary_classification",
+    "recommended_metric": "f1",
+    "reasoning_context": {
+        "imbalance_strategy": "class_weight_balanced",
+        "recommended_models": ["LogisticRegression", "RandomForestClassifier", "XGBClassifier", "LGBMClassifier"],
+    },
     "dataset_path": "datasets/WA_Fn-UseC_-Telco-Customer-Churn.csv",
     "user_goal": "Predict customer churn with high F1-score and low false positive rate",
     "messages": [],

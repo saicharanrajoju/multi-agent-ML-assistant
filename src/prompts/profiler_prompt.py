@@ -36,39 +36,46 @@ Format your response EXACTLY like this:
 ## DATA PROFILE REPORT
 [your markdown report here]
 
-## TARGET COLUMN
-[column_name]
-
 ## PROFILING CODE
 ```python
 [your Python code here]
 ```
 
-## DATA ISSUES
-[list each issue on a new line, prefixed with "- "]
-
-## COLUMN INFO
-[for each column, one per line: column_name | dtype | n_unique | n_missing | notes]
+## METADATA
+```json
+{
+  "target_column": "column_name",
+  "data_issues": [
+    "Issue 1",
+    "Issue 2"
+  ],
+  "column_info": {
+    "col1": {"dtype": "int", "n_unique": 10, "n_missing": 0, "notes": "ok"},
+    "col2": {"dtype": "object", "n_unique": 5, "n_missing": 10, "notes": "convert to numeric"}
+  }
+}
+```
 
 TARGET COLUMN DETECTION:
 Based on the user's goal, identify which column is the target variable.
 - For 'predict churn': target is 'Churn'
 - For 'predict survival': target is 'Survived'
 - For 'predict fraud': target is 'Class' or 'isFraud'
-- For other goals: identify the most likely target based on column names and the goal description
-
-In your COLUMN INFO section, clearly mark which column is the target with '(TARGET)' next to it.
-
-Also output a dedicated line:
-## TARGET COLUMN
-[column_name]
+- For other goals: identify the most likely target based on column names and the goal description.
 """
 
 PROFILER_USER_PROMPT = """Analyze this dataset for the following goal: {user_goal}
 
 Dataset path in sandbox: {sandbox_path}
 
-Here is the initial dataset summary:
+COLUMNS: {columns}
 
+DATA TYPES:
+{dtypes}
+
+BASIC STATISTICS:
+{description}
+
+SAMPLE ROWS:
 {dataset_preview}
 """

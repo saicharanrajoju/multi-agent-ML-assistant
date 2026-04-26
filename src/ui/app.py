@@ -2,704 +2,363 @@ import streamlit as st
 import os
 import sys
 import time
-from typing import Dict, Any
-import plotly.graph_objects as go
-import plotly.figure_factory as ff
+import traceback
 import contextlib
 import io
+import pandas as pd
 
 # Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, PROJECT_ROOT)
 
 from src.graph import graph
 from src.state import AgentState
-from src.tools.code_executor import SandboxManager
+from src.tools.code_executor import close_sandbox_for_run
+
+# Import newly split UI components
+from src.ui.components.sidebar import render_sidebar
+from src.ui.components.pipeline_status import render_pipeline_progress, render_pipeline_logs
+from src.ui.components.approval_panel import render_approval_panel
+from src.ui.components.results_panel import render_results_panel
+from src.ui.components.diagnosis_panel import render_diagnosis_panel
+from src.ui.styles import apply_custom_styles
+from src.ui.ui_components import banner, empty_state
 
 # Page config
 st.set_page_config(
-    page_title="Multi-Agent ML Assistant",
-    page_icon="🤖",
+    page_title="ML Agent Assistant",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+apply_custom_styles()
 
-# Initialize session state
-if "pipeline_state" not in st.session_state:
-    st.session_state.pipeline_state = None
-if "pipeline_config" not in st.session_state:
-    st.session_state.pipeline_config = None
-if "pipeline_running" not in st.session_state:
-    st.session_state.pipeline_running = False
-if "pipeline_complete" not in st.session_state:
-    st.session_state.pipeline_complete = False
-if "current_step" not in st.session_state:
-    st.session_state.current_step = 0
-if "logs" not in st.session_state:
-    st.session_state.logs = []
-if "waiting_for_approval" not in st.session_state:
-    st.session_state.waiting_for_approval = False
-if "next_node" not in st.session_state:
-    st.session_state.next_node = None
-if "full_debug_log" not in st.session_state:
-    st.session_state.full_debug_log = "--- System Log init ---\n"
+# Initialize session state (Only mutate in this top-level wrapper)
+defaults = {
+    "pipeline_state": None,
+    "pipeline_config": None,
+    "pipeline_running": False,
+    "pipeline_complete": False,
+    "current_step": 0,
+    "logs": [],
+    "waiting_for_approval": False,
+    "next_node": None,
+    "full_debug_log": "--- System Log init ---\n",
+    "balloons_shown": False,
+    "last_error": None,
+}
+for key, val in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
 
-AGENT_STEPS = [
-    {"name": "profiler", "icon": "🔍", "label": "Data Profiling"},
-    {"name": "cleaner", "icon": "🧹", "label": "Data Cleaning"},
-    {"name": "feature_engineer", "icon": "⚙️", "label": "Feature Engineering"},
-    {"name": "modeler", "icon": "🤖", "label": "Model Training"},
-    {"name": "critic", "icon": "🧐", "label": "Pipeline Critique"},
-    {"name": "deployer", "icon": "🚀", "label": "Deployment"},
-]
+# Need access to agent tracking for progress
+from src.ui.components.pipeline_status import AGENT_NAME_TO_STEP, AGENT_STEPS
 
-# --- SIDEBAR ---
-with st.sidebar:
-    st.title("🤖 ML Agent Assistant")
-    st.markdown("---")
+def _update_step_from_agent(agent_name: str):
+    if agent_name in AGENT_NAME_TO_STEP:
+        st.session_state.current_step = AGENT_NAME_TO_STEP[agent_name] + 1
 
-    # Sidebar to reset history
-    st.header("⚙️ Configuration")
-    if st.button("Reset Agent Memory"):
-        if "thread_id" in st.session_state:
-            del st.session_state["thread_id"]
-        if "messages" in st.session_state:
-            del st.session_state["messages"]
+def _run_graph_stream(initial_or_none, config):
+    try:
+        stdout_capture = io.StringIO()
+        with contextlib.redirect_stdout(stdout_capture):
+            for event in graph.stream(initial_or_none, config, stream_mode="values"):
+                agent = event.get("current_agent", "")
+                if agent:
+                    msg = f"✅ {agent.upper()} completed"
+                    st.session_state.logs.append(msg)
+                    st.session_state.pipeline_state = event
+                    _update_step_from_agent(agent)
+
+        captured_log = stdout_capture.getvalue()
+        st.session_state.full_debug_log += captured_log
+
+        # Check if waiting at interrupt
+        state = graph.get_state(config)
+        if state.next:
+            st.session_state.waiting_for_approval = True
+            st.session_state.next_node = state.next[0]
+            msg = f"⏸️ Waiting for approval before: {state.next[0]}"
+            st.session_state.logs.append(msg)
+            st.session_state.full_debug_log += f"[{time.strftime('%H:%M:%S')}] {msg}\n"
+        else:
+            st.session_state.pipeline_complete = True
+            st.session_state.pipeline_running = False
+            st.session_state.logs.append("🎉 Pipeline complete!")
+            st.session_state.full_debug_log += f"[{time.strftime('%H:%M:%S')}] Pipeline complete!\n"
+            run_id = (st.session_state.pipeline_config or {}).get("configurable", {}).get("thread_id", "default")
+            close_sandbox_for_run(run_id)
+        return True
+    except Exception as e:
+        error_msg = f"❌ Error: {str(e)}"
+        st.session_state.logs.append(error_msg)
+        st.session_state.pipeline_running = False
+        st.session_state.last_error = str(e)
+
+        tb = traceback.format_exc()
+        st.session_state.full_debug_log += f"\n[{time.strftime('%H:%M:%S')}] EXCEPTION:\n{tb}\n"
+
+        run_id = (st.session_state.pipeline_config or {}).get("configurable", {}).get("thread_id", "default")
+        close_sandbox_for_run(run_id)
+        return False
+
+def _full_reset():
+    run_id = (st.session_state.get("pipeline_config") or {}).get("configurable", {}).get("thread_id", "default")
+    close_sandbox_for_run(run_id)
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.rerun()
+
+def _retry_last_step():
+    if st.session_state.pipeline_config:
+        st.session_state.pipeline_running = True
+        st.session_state.last_error = None
+        st.session_state.logs.append("🔁 Retrying from last checkpoint...")
+        with st.spinner("Retrying..."):
+            _run_graph_stream(None, st.session_state.pipeline_config)
         st.rerun()
 
-    st.markdown("---")
-    st.markdown("### 📂 Choose Dataset")
-    
-    # Scan datasets folder for available CSVs
-    datasets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "datasets")
-    os.makedirs(datasets_dir, exist_ok=True)
-    
-    available_datasets = []
-    if os.path.exists(datasets_dir):
-        for f in os.listdir(datasets_dir):
-            if f.endswith('.csv'):
-                available_datasets.append(f)
-    
-    dataset_choice = st.radio(
-        "Select a dataset:",
-        options=["Upload my own"] + available_datasets,
-        index=0,
-    )
+def _approve_and_continue(feedback: str):
+    st.session_state.waiting_for_approval = False
+    st.session_state.logs.append(f"✅ Approved: {st.session_state.next_node}")
 
-    dataset_path = ""
-    if dataset_choice == "Upload my own":
-        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
-        if uploaded_file:
-            # Save uploaded file
-            save_path = os.path.join(datasets_dir, uploaded_file.name)
-            with open(save_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            dataset_path = uploaded_file.name
-            st.success(f"Uploaded: {uploaded_file.name}")
-    else:
-        dataset_path = dataset_choice
+    graph.update_state(st.session_state.pipeline_config, {"human_feedback": feedback})
+    if feedback:
+        st.session_state.logs.append(f"📝 Feedback submitted: {feedback}")
 
-    # Sidebar ends here
-    
-# --- MAIN AREA ---
-st.title("🤖 Multi-Agent ML Assistant")
-st.markdown("*An AI-powered pipeline that automates ML workflows with human oversight*")
+    with st.spinner(f"Running {st.session_state.next_node}..."):
+        _run_graph_stream(None, st.session_state.pipeline_config)
+    st.rerun()
 
-# Smart goal suggestions based on selected dataset
-goal_suggestions = {
-    "WA_Fn-UseC_-Telco-Customer-Churn.csv": "Predict customer churn with high F1-score and low false positive rate",
-    "titanic.csv": "Predict passenger survival with high recall to identify all survivors",
-}
+def _submit_feedback_and_continue(feedback: str):
+    st.session_state.waiting_for_approval = False
+    graph.update_state(st.session_state.pipeline_config, {"human_feedback": feedback})
+    if feedback:
+        st.session_state.logs.append(f"📝 Feedback submitted: {feedback}")
 
-default_goal = ""
-if "dataset_choice" in locals() and dataset_choice in goal_suggestions:
-    default_goal = goal_suggestions[dataset_choice]
+    with st.spinner(f"Running {st.session_state.next_node} with feedback..."):
+        _run_graph_stream(None, st.session_state.pipeline_config)
+    st.rerun()
 
-# User Input
-if "dataset_path" in locals() and dataset_path:
-    st.info(f"Using dataset: `{dataset_path}`")
-else:
-    st.warning("Please select or upload a dataset in the sidebar.")
+def _stop_pipeline():
+    st.session_state.pipeline_running = False
+    st.session_state.waiting_for_approval = False
+    st.session_state.logs.append("🛑 Pipeline stopped by user")
+    run_id = (st.session_state.get("pipeline_config") or {}).get("configurable", {}).get("thread_id", "default")
+    close_sandbox_for_run(run_id)
+    st.rerun()
 
-user_goal = st.text_area(
-    "🎯 Modeling Goal",
-    value=default_goal,
-    placeholder="e.g., Predict customer churn with high accuracy...",
-    height=100
+
+# --- Main Wrapper Execution ---
+datasets_dir = os.path.join(PROJECT_ROOT, "datasets")
+os.makedirs(datasets_dir, exist_ok=True)
+
+# 1. SIDEBAR
+dataset_path = render_sidebar(datasets_dir=datasets_dir, on_reset=_full_reset)
+
+# 2. HEADER
+st.markdown(
+    '<h1 style="margin-bottom:0.2rem">ML Agent Assistant</h1>'
+    '<p style="color:var(--text-muted);font-size:0.9rem;margin-top:0;margin-bottom:1.25rem">'
+    'Automated ML pipeline with human-in-the-loop oversight</p>',
+    unsafe_allow_html=True,
 )
 
-# Run button
-if st.button("🚀 Run Pipeline", type="primary", use_container_width=True, disabled=st.session_state.pipeline_running):
+# 3. PIPELINE STATUS
+render_pipeline_progress(
+    current_step=st.session_state.current_step,
+    is_running=st.session_state.pipeline_running,
+    is_complete=st.session_state.pipeline_complete
+)
+
+# 4. START PIPELINE CONTROLS
+goal_suggestions = {
+    "WA_Fn-UseC_-Telco-Customer-Churn.csv": "Predict customer churn with high F1-score and low false positive rate",
+    "telco_churn.csv": "Predict customer churn with high F1-score and low false positive rate",
+    "titanic.csv": "Predict passenger survival with high recall to identify all survivors",
+    "adult_income.csv": "Predict whether income exceeds $50K per year with high F1-score, handling class imbalance",
+}
+
+# Assume choice is dataset_path
+default_goal = goal_suggestions.get(dataset_path, "")
+
+if dataset_path:
+    st.markdown(
+        banner(f"<strong>{dataset_path}</strong> selected", kind="info"),
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        empty_state("", "No dataset selected", "Choose a CSV from the sidebar or upload your own.", "← Select a dataset to begin"),
+        unsafe_allow_html=True,
+    )
+
+user_goal = st.text_area(
+    "Modeling goal",
+    value=default_goal,
+    placeholder="e.g., Predict customer churn with high F1-score and low false positive rate",
+    height=88,
+)
+
+if st.button("Run Pipeline", type="primary", use_container_width=True, disabled=st.session_state.pipeline_running):
     if not user_goal:
         st.error("Please enter a goal.")
-    elif not ("dataset_path" in locals() and dataset_path):
+    elif not dataset_path:
         st.error("Please select a dataset.")
     else:
-        st.session_state.pipeline_running = True
+        _validation_error = None
+        try:
+            _preview_path = os.path.join(datasets_dir, dataset_path)
+            _df_check = pd.read_csv(_preview_path, nrows=500)
+            _total_rows = sum(1 for _ in open(_preview_path)) - 1
+            if _total_rows < 50:
+                _validation_error = f"Dataset too small ({_total_rows} rows). Need at least 50 rows to train a model."
+            elif _total_rows > 100_000:
+                _validation_error = f"Dataset too large ({_total_rows:,} rows). Please reduce to under 100,000 rows to avoid sandbox timeouts."
+            elif _df_check.shape[1] < 2:
+                _validation_error = "Dataset must have at least 2 columns (features + target)."
+            elif _df_check.shape[1] > 500:
+                _validation_error = f"Dataset has {_df_check.shape[1]} columns — too wide. Reduce to under 500."
+            elif len(_df_check.select_dtypes(include='number').columns) == 0:
+                _validation_error = "No numeric columns found. The pipeline requires at least one numeric feature."
+        except Exception as _ve:
+            _validation_error = f"Could not read dataset: {str(_ve)}"
+
+        if _validation_error:
+            st.error(_validation_error)
+        else:
+            st.session_state.pipeline_running = True
         st.session_state.pipeline_complete = False
         st.session_state.current_step = 0
         st.session_state.logs = []
         st.session_state.waiting_for_approval = False
+        st.session_state.balloons_shown = False
+        st.session_state.last_error = None
 
-        # Create config with unique thread ID
         thread_id = f"streamlit-run-{int(time.time())}"
         st.session_state.pipeline_config = {"configurable": {"thread_id": thread_id}}
 
         initial_state = {
+            # Input
             "dataset_path": dataset_path,
             "user_goal": user_goal,
-            "messages": [],
-            "iteration_count": 0,
-            "should_iterate": False,
+            # Profiling
+            "profile_report": "",
+            "column_info": {},
+            "data_issues": [],
+            "dataset_summary": {},
+            "target_column": "",
+            # Reasoning context
+            "problem_type": "binary_classification",
+            "recommended_metric": "f1",
+            "reasoning_context": {},
+            # Cleaning
+            "cleaning_code": "",
+            "cleaning_summary": {},
             "cleaning_approved": False,
+            "cleaning_result": "",
+            # Feature engineering
+            "feature_code": "",
             "feature_approved": False,
+            "feature_result": "",
+            "unit_test_results": {},
+            # Modeling
+            "model_code": "",
             "model_approved": False,
-            "deployment_approved": False,
-            "human_feedback": "",
-            "error": "",
+            "model_result": "",
             "visualization_data": {},
-            "scorecard": {},
+            "model_unit_test_results": {},
+            "scout_ranking": [],
+            # Critique
+            "critique_report": "",
+            "improvement_suggestions": [],
             "code_fixes": [],
             "iteration_history": [],
-            "dataset_summary": {},
-            "cleaning_summary": {},
-            "target_column": "",
+            "iteration_count": 0,
+            "should_iterate": False,
+            "scorecard": {},
+            # Narrations
+            "profiler_narration": "",
+            "cleaning_narration": "",
+            "feature_narration": "",
+            "model_narration": "",
+            # Pre-execution review
+            "pre_exec_corrections": [],
+            # Control
+            "messages": [],
+            "current_agent": "",
+            "human_feedback": "",
+            "error": "",
         }
         st.session_state.pipeline_state = initial_state
-
-        # Start the pipeline
-        start_msg = f"[{time.strftime('%H:%M:%S')}] 🚀 Pipeline started!\n"
         st.session_state.logs.append("🚀 Pipeline started!")
-        st.session_state.full_debug_log += start_msg
-        
-        try:
-            # Capture stdout to log agent print statements
-            stdout_capture = io.StringIO()
-            with contextlib.redirect_stdout(stdout_capture):
-                for event in graph.stream(initial_state, st.session_state.pipeline_config, stream_mode="values"):
-                    agent = event.get("current_agent", "")
-                    if agent:
-                        msg = f"✅ {agent.upper()} completed"
-                        st.session_state.logs.append(msg)
-                        st.session_state.pipeline_state = event
-            
-            # Append captured stdout to full log
-            captured_log = stdout_capture.getvalue()
-            st.session_state.full_debug_log += captured_log
-            
-            # Optional: dump final state keys for structure check
-            # st.session_state.full_debug_log += f"    State keys update: {list(event.keys())}\n"
+        st.session_state.full_debug_log += f"[{time.strftime('%H:%M:%S')}] Pipeline started!\n"
 
-            # Check if waiting at interrupt
-            state = graph.get_state(st.session_state.pipeline_config)
-            if state.next:
-                st.session_state.waiting_for_approval = True
-                st.session_state.next_node = state.next[0]
-                msg = f"⏸️ Waiting for approval before: {state.next[0]}"
-                st.session_state.logs.append(msg)
-                st.session_state.full_debug_log += f"[{time.strftime('%H:%M:%S')}] {msg}\n"
-            else:
-                st.session_state.pipeline_complete = True
-                st.session_state.pipeline_running = False
-                end_msg = f"[{time.strftime('%H:%M:%S')}] 🎉 Pipeline complete!\n"
-                st.session_state.full_debug_log += end_msg
-                SandboxManager.reset()
-        except Exception as e:
-            import traceback
-            error_msg = f"❌ Error: {str(e)}"
-            st.session_state.logs.append(error_msg)
-            st.session_state.pipeline_running = False
-            
-            # Full traceback for debug log
-            tb = traceback.format_exc()
-            st.session_state.full_debug_log += f"\n[{time.strftime('%H:%M:%S')}] ❌ EXCEPTION OCCURRED:\n{tb}\n"
-            
-            SandboxManager.reset()
+        with st.spinner("Running pipeline... This may take a few minutes."):
+            _run_graph_stream(initial_state, st.session_state.pipeline_config)
 
         st.rerun()
 
-# Reset button
-if st.button("🔄 Reset Logic", use_container_width=True):
-    SandboxManager.reset()
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
-    st.rerun()
-    
-# Create tabs
-tab_progress, tab_profile, tab_results, tab_critique, tab_deployment = st.tabs([
-    "📋 Pipeline Progress",
-    "📊 Data Profile",
-    "📈 Model Results",
-    "🧐 Critique & Scorecard",
-    "🚀 Deployment",
-])
+# 5. PIPELINE LOGS & ERRORS
+render_pipeline_logs(
+    logs=st.session_state.logs,
+    last_error=st.session_state.last_error,
+    is_running=st.session_state.pipeline_running,
+    on_reset=_full_reset,
+    on_retry=_retry_last_step
+)
 
-with tab_progress:
-    # Show logs
-    if st.session_state.logs:
-        st.subheader("Pipeline Log")
-        log_container = st.container()
-        with log_container:
-            for log in st.session_state.logs:
-                if "Error" in log or "❌" in log:
-                    st.error(log)
-                elif "✅" in log:
-                    st.success(log)
-                elif "⏸️" in log:
-                    st.warning(log)
-                else:
-                    st.info(log)
-
-    # Human review section
-    if st.session_state.waiting_for_approval:
-        st.markdown("---")
-        st.subheader(f"⏸️ Review Required: {st.session_state.next_node}")
-
-        state_vals = st.session_state.pipeline_state or {}
-
-        # Show relevant info
-        if st.session_state.next_node == "cleaner":
-            st.markdown("### Data Profile Summary")
-            st.markdown(state_vals.get("profile_report", "No report yet")[:2000])
-            issues = state_vals.get("data_issues", [])
-            if issues:
-                st.markdown("### Issues Found")
-                for issue in issues:
-                    st.markdown(f"- {issue}")
-
-        elif st.session_state.next_node == "feature_engineer":
-            st.markdown("### Cleaning Results")
-            st.text(state_vals.get("cleaning_result", "No result yet"))
-            with st.expander("View Cleaning Code"):
-                st.code(state_vals.get("cleaning_code", "No code yet"), language="python")
-
-        elif st.session_state.next_node == "modeler":
-            st.markdown("### Feature Engineering Results")
-            st.text(state_vals.get("feature_result", "No result yet"))
-            with st.expander("View Feature Engineering Code"):
-                st.code(state_vals.get("feature_code", "No code yet"), language="python")
-
-        elif st.session_state.next_node == "deployer":
-            st.markdown("### Model Training Results")
-            st.text(state_vals.get("model_result", "No result yet"))
-            st.markdown("### Critic Feedback")
-            st.markdown(state_vals.get("critique_report", "No critique yet")[:1500])
-
-        # Approval buttons
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            if st.button("✅ Approve & Continue", type="primary", use_container_width=True):
-                st.session_state.waiting_for_approval = False
-                st.session_state.logs.append(f"✅ Approved: {st.session_state.next_node}")
-
-                try:
-                    # Capture stdout to log agent print statements
-                    stdout_capture = io.StringIO()
-                    with contextlib.redirect_stdout(stdout_capture):
-                        for event in graph.stream(None, st.session_state.pipeline_config, stream_mode="values"):
-                            agent = event.get("current_agent", "")
-                            if agent:
-                                msg = f"✅ {agent.upper()} completed"
-                                st.session_state.logs.append(msg)
-                                st.session_state.pipeline_state = event
-                    
-                    # Append captured stdout to full log
-                    captured_log = stdout_capture.getvalue()
-                    st.session_state.full_debug_log += captured_log
-
-                    # Check for next interrupt
-                    state = graph.get_state(st.session_state.pipeline_config)
-                    if state.next:
-                        st.session_state.waiting_for_approval = True
-                        st.session_state.next_node = state.next[0]
-                        st.session_state.logs.append(f"⏸️ Waiting for approval before: {state.next[0]}")
-                    else:
-                        st.session_state.pipeline_complete = True
-                        st.session_state.pipeline_running = False
-                        st.session_state.logs.append("🎉 Pipeline complete!")
-                        SandboxManager.reset()
-                except Exception as e:
-                    st.session_state.logs.append(f"❌ Error: {str(e)}")
-                    st.session_state.pipeline_running = False
-                    SandboxManager.reset()
-
-                st.rerun()
-
-        with col2:
-            feedback = st.text_input("📝 Feedback (optional)")
-            if st.button("📝 Submit Feedback & Continue", use_container_width=True):
-                st.session_state.waiting_for_approval = False
-                if feedback:
-                    graph.update_state(st.session_state.pipeline_config, {"human_feedback": feedback})
-                    st.session_state.logs.append(f"📝 Feedback submitted: {feedback}")
-
-                try:
-                    # Capture stdout to log agent print statements
-                    stdout_capture = io.StringIO()
-                    with contextlib.redirect_stdout(stdout_capture):
-                        for event in graph.stream(None, st.session_state.pipeline_config, stream_mode="values"):
-                            agent = event.get("current_agent", "")
-                            if agent:
-                                msg = f"✅ {agent.upper()} completed"
-                                st.session_state.logs.append(msg)
-                                st.session_state.pipeline_state = event
-
-                    # Append captured stdout to full log
-                    captured_log = stdout_capture.getvalue()
-                    st.session_state.full_debug_log += captured_log
-
-                    state = graph.get_state(st.session_state.pipeline_config)
-                    if state.next:
-                        st.session_state.waiting_for_approval = True
-                        st.session_state.next_node = state.next[0]
-                        st.session_state.logs.append(f"⏸️ Waiting for approval before: {state.next[0]}")
-                    else:
-                        st.session_state.pipeline_complete = True
-                        st.session_state.pipeline_running = False
-                        st.session_state.logs.append("🎉 Pipeline complete!")
-                        SandboxManager.reset()
-                except Exception as e:
-                    st.session_state.logs.append(f"❌ Error: {str(e)}")
-                    st.session_state.pipeline_running = False
-                    SandboxManager.reset()
-
-                st.rerun()
-
-        with col3:
-            if st.button("🛑 Stop Pipeline", use_container_width=True):
-                st.session_state.pipeline_running = False
-                st.session_state.waiting_for_approval = False
-                st.session_state.logs.append("🛑 Pipeline stopped by user")
-                SandboxManager.reset()
-                st.rerun()
-
-    elif st.session_state.pipeline_complete:
-        st.success("🎉 Pipeline completed successfully!")
+# 6. APPROVAL PANEL (if waiting)
+if st.session_state.waiting_for_approval:
+    render_approval_panel(
+        next_node=st.session_state.next_node,
+        pipeline_state=st.session_state.pipeline_state,
+        on_approve=_approve_and_continue,
+        on_submit_feedback=_submit_feedback_and_continue,
+        on_stop=_stop_pipeline
+    )
+elif st.session_state.pipeline_complete:
+    st.markdown(
+        banner("All agents completed. Review the results in the tabs below.", kind="success", title="Pipeline complete"),
+        unsafe_allow_html=True,
+    )
+    if not st.session_state.balloons_shown:
         st.balloons()
+        st.session_state.balloons_shown = True
+elif not st.session_state.pipeline_running and not st.session_state.logs:
+    st.markdown(
+        empty_state("", "Ready to run", "Select a dataset, describe your modeling goal, then click Run Pipeline.", "Results will appear here once the pipeline completes"),
+        unsafe_allow_html=True,
+    )
 
-    elif not st.session_state.pipeline_running and not st.session_state.logs:
-        st.info("👈 Upload a dataset and click 'Run Pipeline' to get started!")
+# 7. TABS / RESULTS PANEL
+render_results_panel(
+    state_vals=st.session_state.pipeline_state,
+    project_root=PROJECT_ROOT
+)
 
+# 8. DIAGNOSIS PANEL (save + LLM assessment)
+render_diagnosis_panel(
+    state=st.session_state.pipeline_state,
+    project_root=PROJECT_ROOT
+)
 
-with tab_profile:
-    state_vals = st.session_state.pipeline_state or {}
-    report = state_vals.get("profile_report", "")
-    if report:
-        st.markdown("## Data Profile Report")
-        st.markdown(report)
-
-        issues = state_vals.get("data_issues", [])
-        if issues:
-            st.markdown("---")
-            st.markdown("## Identified Issues")
-            for issue in issues:
-                st.warning(f"⚠️ {issue}")
-    else:
-        st.info("Data profile will appear here after the Profiler Agent runs.")
-
-
-with tab_results:
-    state_vals = st.session_state.pipeline_state or {}
-    viz_data = state_vals.get("visualization_data", {})
-    
-    if viz_data:
-        st.markdown("## 📈 Model Performance Dashboard")
-        
-        # Top level metrics
-        if "best_model" in viz_data:
-            bm = viz_data["best_model"]
-            reports = bm.get("classification_report", {})
-            
-            # Extract weighted avg or macro avg if available, or class 1 for churn
-            f1 = reports.get("f1_1", 0)  # assume binary classification class 1
-            acc = reports.get("accuracy", 0)
-            
-            # Find best model metrics from comparison
-            best_model_name = bm.get("name", "Unknown")
-            
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("🏆 Best Model", best_model_name)
-            
-            # Try to get data from comparison to be precise
-            if "model_comparison" in viz_data:
-                comp = viz_data["model_comparison"]
-                try:
-                    idx = comp["model_names"].index(best_model_name)
-                    col2.metric("F1 Score", f"{comp['f1_score'][idx]:.3f}")
-                    col3.metric("AUC-ROC", f"{comp['auc_roc'][idx]:.3f}")
-                    col4.metric("Accuracy", f"{comp['accuracy'][idx]:.3f}")
-                except:
-                    col2.metric("F1 Score", "N/A")
-
-        st.markdown("---")
-        
-        # A) Model Comparison
-        if "model_comparison" in viz_data:
-            st.subheader("📊 Model Comparison")
-            comparison = viz_data["model_comparison"]
-            fig = go.Figure()
-            metrics = ["accuracy", "precision", "recall", "f1_score", "auc_roc"]
-            colors = ["#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A"]
-            
-            for metric, color in zip(metrics, colors):
-                if metric in comparison:
-                    fig.add_trace(go.Bar(
-                        name=metric.replace("_", " ").title(),
-                        x=comparison["model_names"],
-                        y=comparison[metric],
-                        marker_color=color,
-                    ))
-            
-            fig.update_layout(
-                barmode='group',
-                title="Model Performance Metrics by Model",
-                yaxis_title="Score",
-                yaxis=dict(range=[0, 1]),
-                template="plotly_white",
-                height=500,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        col_left, col_right = st.columns(2)
-        
-        with col_left:
-            # B) Confusion Matrix
-            if "best_model" in viz_data:
-                cm = viz_data["best_model"].get("confusion_matrix")
-                if cm:
-                    st.subheader(f"🟦 Confusion Matrix: {viz_data['best_model']['name']}")
-                    labels = ["No Churn", "Churn"] # This might need to be dynamic based on dataset
-                    
-                    # Flatten logic just in case, or handle list of lists
-                    z = cm
-                    x = labels
-                    y = labels
-                    
-                    # Invert Y for heatmap to match standard confusion matrix layout if needed, 
-                    # but plotly heatmap usually starts bottom-left. 
-                    # Standard CM: True Label on Y (Top-Down), Predicted on X (Left-Right)
-                    
-                    fig_cm = ff.create_annotated_heatmap(
-                        z=z,
-                        x=x,
-                        y=y,
-                        colorscale="Blues",
-                        showscale=True,
-                    )
-                    fig_cm.update_layout(
-                        xaxis_title="Predicted Label",
-                        yaxis_title="True Label",
-                        height=400,
-                    )
-                    st.plotly_chart(fig_cm, use_container_width=True)
-
-        with col_right:
-            # D) Cross-Validation
-            if "cross_validation" in viz_data:
-                cv = viz_data["cross_validation"]
-                st.subheader("📉 Cross-Validation Consistency")
-                
-                scores = cv.get("cv_scores", [])
-                if scores:
-                    mean_val = cv.get("mean", sum(scores)/len(scores))
-                    std_val = cv.get("std", 0)
-                    
-                    fig_cv = go.Figure()
-                    fig_cv.add_trace(go.Bar(
-                        x=[f"Fold {i+1}" for i in range(len(scores))],
-                        y=scores,
-                        marker_color="#00CC96",
-                        name="Fold Score"
-                    ))
-                    fig_cv.add_hline(
-                        y=mean_val, 
-                        line_dash="dash", 
-                        line_color="red",
-                        annotation_text=f"Mean: {mean_val:.3f} ± {std_val:.3f}",
-                        annotation_position="top right"
-                    )
-                    fig_cv.update_layout(
-                        yaxis_title="Score",
-                        yaxis=dict(range=[max(0, mean_val-0.2), min(1, mean_val+0.2)]), # Zoom in a bit
-                        template="plotly_white",
-                        height=400,
-                    )
-                    st.plotly_chart(fig_cv, use_container_width=True)
-
-        # C) Feature Importance
-        if "best_model" in viz_data:
-            fi = viz_data["best_model"].get("feature_importance")
-            if fi:
-                st.subheader("✨ Top Feature Importances")
-                
-                names = fi["feature_names"][:15]
-                values = fi["importance_values"][:15]
-                
-                # Sort for chart (ascending for horizontal bar to show top at top)
-                names_sorted = names[::-1]
-                values_sorted = values[::-1]
-                
-                fig_fi = go.Figure(go.Bar(
-                    x=values_sorted,
-                    y=names_sorted,
-                    orientation='h',
-                    marker_color="#636EFA",
-                ))
-                fig_fi.update_layout(
-                    xaxis_title="Importance Score",
-                    template="plotly_white",
-                    height=600,
-                )
-                st.plotly_chart(fig_fi, use_container_width=True)
-
-        # Raw results fallback
-        with st.expander("View Raw Training Results & Code"):
-            st.text(state_vals.get("model_result", ""))
-            st.code(state_vals.get("model_code", "No code"), language="python")
-            
-    else:
-        # Fallback if no viz data yet
-        model_result = state_vals.get("model_result", "")
-        if model_result:
-            st.markdown("## Model Training Results")
-            st.text(model_result)
-            with st.expander("View Model Training Code"):
-                st.code(state_vals.get("model_code", "No code"), language="python")
-        else:
-            st.info("Model results and visualizations will appear here after the Modeler Agent runs.")
-
-
-with tab_critique:
-    state_vals = st.session_state.pipeline_state or {}
-    critique = state_vals.get("critique_report", "")
-    scorecard = state_vals.get("scorecard", {})
-    
-    if critique or scorecard:
-        st.markdown("## 🧐 Critique & Scorecard")
-        
-        # F) Scorecard Radar Chart
-        if scorecard:
-            col1, col2 = st.columns([1, 1])
-            
-            with col1:
-                st.subheader("Pipeline Quality Scorecard")
-                categories = list(scorecard.keys())
-                if "overall" in categories:
-                    categories.remove("overall")
-                
-                # Standard order if possible
-                desired_order = ["data_leakage", "code_quality", "metric_alignment", 
-                                 "feature_engineering", "model_selection", "deployment_readiness"]
-                
-                ordered_cats = [c for c in desired_order if c in categories]
-                # Add any others found
-                for c in categories:
-                    if c not in ordered_cats:
-                        ordered_cats.append(c)
-                
-                values = [scorecard.get(c, 0) for c in ordered_cats]
-                labels = [c.replace("_", " ").title() for c in ordered_cats]
-                
-                fig_radar = go.Figure(go.Scatterpolar(
-                    r=values + [values[0]],  # close the polygon
-                    theta=labels + [labels[0]],
-                    fill='toself',
-                    fillcolor='rgba(99, 110, 250, 0.2)',
-                    line=dict(color='#636EFA', width=2),
-                ))
-                fig_radar.update_layout(
-                    polar=dict(
-                        radialaxis=dict(visible=True, range=[0, 10])
-                    ),
-                    height=450,
-                    margin=dict(l=40, r=40, t=20, b=20),
-                )
-                st.plotly_chart(fig_radar, use_container_width=True)
-            
-            with col2:
-                st.subheader("Details")
-                overall = scorecard.get("overall", "N/A")
-                st.metric("⭐ Overall Score", f"{overall}/10")
-                
-                st.markdown("### Breakdown")
-                for cat, val in zip(labels, values):
-                    st.progress(val/10, text=f"{cat}: {val}/10")
-
-        st.markdown("---")
-        st.markdown("### 📝 Detailed Critique Report")
-        st.markdown(critique)
-
-        suggestions = state_vals.get("improvement_suggestions", [])
-        if suggestions:
-            st.markdown("---")
-            st.markdown("## Improvement Suggestions")
-            for i, s in enumerate(suggestions, 1):
-                st.info(f"💡 {i}. {s}")
-
-        st.markdown(f"**Iterations completed:** {state_vals.get('iteration_count', 0)}")
-        
-        # Iteration History
-        history = state_vals.get("iteration_history", [])
-        if history:
-            st.markdown("---")
-            st.subheader("📜 Iteration History")
-            for entry in history:
-                with st.expander(f"Iteration {entry['iteration']} — Severity: {entry.get('severity', 'N/A')}"):
-                    st.markdown(f"**Fixes required:** {entry.get('n_fixes', 0)}")
-                    if entry.get('suggestions'):
-                        st.markdown("**Suggestions:**")
-                        for s in entry['suggestions']:
-                            st.markdown(f"- {s}")
-                    if entry.get('scorecard'):
-                        st.json(entry['scorecard'])
-    else:
-        st.info("Critique report and scorecard will appear here after the Critic Agent runs.")
-
-
-with tab_deployment:
-    state_vals = st.session_state.pipeline_state or {}
-    deployment_code = state_vals.get("deployment_code", "")
-    if deployment_code:
-        st.markdown("## Deployment Package")
-        st.success(f"🌐 API Endpoint: {state_vals.get('api_endpoint', 'http://localhost:8000')}")
-
-        with st.expander("View Deployment Generator Code"):
-            st.code(deployment_code, language="python")
-
-        # Check if deployment files exist
-        deploy_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "outputs", "deployment")
-        if os.path.exists(deploy_dir):
-            st.markdown("### Generated Files")
-            for f in os.listdir(deploy_dir):
-                filepath = os.path.join(deploy_dir, f)
-                st.markdown(f"📄 `{f}` ({os.path.getsize(filepath)} bytes)")
-
-            st.markdown("### Quick Start")
-            st.code("cd outputs/deployment\ndocker-compose up --build\n# API available at http://localhost:8000", language="bash")
-    else:
-        st.info("Deployment package will appear here after the Deployer Agent runs.")
-
-
-# --- DEBUG CONSOLE (Added per user request) ---
-with st.expander("🛠️ System Log / Debug Console", expanded=False):
-    st.info("Copy this log to share tracebacks and errors with the developer.")
-    
-    # Download button
+# --- DEBUG CONSOLE ---
+with st.expander("System log", expanded=False):
+    st.caption("Copy this log to share tracebacks and errors with the developer.")
     if "full_debug_log" in st.session_state:
         st.download_button(
-            label="💾 Download Full Log",
+            label="Download full log",
             data=st.session_state.full_debug_log,
             file_name=f"debug_log_{int(time.time())}.txt",
-            mime="text/plain"
+            mime="text/plain",
         )
-        
-        # Display log with native copy button
-        st.code(
-            st.session_state.full_debug_log, 
-            language="text"
-        )
+        st.code(st.session_state.full_debug_log, language="text")
 
 # Footer
-st.markdown("---")
-st.markdown("*Built with LangGraph, Groq, E2B, and LangSmith | DTSC 5082 Group 2*")
+st.markdown(
+    '<p style="text-align:center;font-size:0.78rem;color:var(--text-muted);margin-top:2rem">'
+    'Built with LangGraph · Groq · E2B · LangSmith &nbsp;|&nbsp; DTSC 5082 Group 2'
+    '</p>',
+    unsafe_allow_html=True,
+)

@@ -4,6 +4,12 @@ from src.agents.feature_eng import feature_engineer_node
 from src.agents.modeler import modeler_node
 
 initial_state = {
+    "problem_type": "binary_classification",
+    "recommended_metric": "f1",
+    "reasoning_context": {
+        "imbalance_strategy": "class_weight_balanced",
+        "recommended_models": ["LogisticRegression", "RandomForestClassifier", "XGBClassifier", "LGBMClassifier"],
+    },
     "dataset_path": "datasets/WA_Fn-UseC_-Telco-Customer-Churn.csv",
     "user_goal": "Predict customer churn with high F1-score and low false positive rate",
     "messages": [],

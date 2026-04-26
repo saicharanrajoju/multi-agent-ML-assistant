@@ -1,4 +1,4 @@
-from typing import TypedDict, Annotated, Optional
+from typing import TypedDict, Annotated
 from langgraph.graph.message import add_messages
 
 class AgentState(TypedDict):
@@ -10,9 +10,13 @@ class AgentState(TypedDict):
     profile_report: str                            # markdown summary from profiler
     column_info: dict                              # column names, types, stats, nulls
     data_issues: list[str]                         # identified problems (missing vals, imbalance, etc.)
-    data_issues: list[str]                         # identified problems (missing vals, imbalance, etc.)
     dataset_summary: dict                          # machine-readable dataset summary from profiler
     target_column: str                             # detected target column name
+
+    # --- Reasoning Context (set by Profiler, read by all downstream agents) ---
+    problem_type: str          # "binary_classification", "multiclass_classification", "regression"
+    recommended_metric: str    # "f1", "recall", "precision", "rmse", "mae", "r2" — parsed from user goal
+    reasoning_context: dict    # structured reasoning: imbalance_strategy, recommended_models, null_patterns, encoding_map, feature_strategies
 
     # --- Cleaning ---
     cleaning_code: str                             # generated Python cleaning code
@@ -24,14 +28,16 @@ class AgentState(TypedDict):
     feature_code: str                              # generated feature engineering code
     feature_approved: bool
     feature_result: str
+    unit_test_results: dict                        # pass/fail results from post-cleaning and post-feature unit tests
 
     # --- Modeling ---
     model_code: str                                # generated model training code
     model_approved: bool
     model_result: str                              # metrics, confusion matrix, etc.
     visualization_data: dict                       # model metrics, confusion matrix, feature importance for UI
+    model_unit_test_results: dict                  # artifact existence + metric sanity checks
+    scout_ranking: list                            # [(model_name, score), ...] from the 10% sample scout
 
-    # --- Critique ---
     # --- Critique ---
     critique_report: str                           # detailed analysis from critic
     improvement_suggestions: list[str]             # actionable suggestions
@@ -41,10 +47,14 @@ class AgentState(TypedDict):
     should_iterate: bool                           # does critic want another round?
     scorecard: dict                                # critic's scoring rubric results
 
-    # --- Deployment ---
-    deployment_code: str                           # FastAPI + Docker code
-    deployment_approved: bool
-    api_endpoint: str                              # deployed URL if applicable
+    # --- Teacher Narrations ---
+    profiler_narration: str                        # plain-English explanation of profiler decisions
+    cleaning_narration: str                        # plain-English explanation of cleaning decisions
+    feature_narration: str                         # plain-English explanation of feature engineering decisions
+    model_narration: str                           # plain-English explanation of model selection decisions
+
+    # --- Pre-Execution Review ---
+    pre_exec_corrections: list                     # issues found and corrected by pre_exec_reviewer per agent
 
     # --- Conversation & Control ---
     messages: Annotated[list, add_messages]         # for LangGraph message passing

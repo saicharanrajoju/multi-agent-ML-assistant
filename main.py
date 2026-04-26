@@ -1,19 +1,28 @@
 import sys
+import time
 from src.graph import graph
 from src.state import AgentState
 from src.tools.code_executor import SandboxManager
+from src.config import validate_required_keys
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(name)s - %(levelname)s - %(message)s')
 
 def run_pipeline(dataset_path: str, user_goal: str):
     """Run the full ML pipeline with human-in-the-loop review."""
-    
+
     print("=" * 70)
     print("🚀 MULTI-AGENT ML ASSISTANT")
     print("=" * 70)
     print(f"📁 Dataset: {dataset_path}")
     print(f"🎯 Goal: {user_goal}")
     print("=" * 70)
-    
-    config = {"configurable": {"thread_id": "pipeline-run-1"}}
+
+    validate_required_keys()
+
+    # Use a unique thread_id each run so state is never replayed from a prior run
+    thread_id = f"pipeline-run-{int(time.time())}"
+    config = {"configurable": {"thread_id": thread_id}}
     
     initial_state = {
         "dataset_path": dataset_path,
@@ -27,6 +36,9 @@ def run_pipeline(dataset_path: str, user_goal: str):
         "deployment_approved": False,
         "human_feedback": "",
         "error": "",
+        "problem_type": "binary_classification",
+        "recommended_metric": "f1",
+        "reasoning_context": {},
     }
     
     # Start the pipeline - it will run profiler then pause before cleaner

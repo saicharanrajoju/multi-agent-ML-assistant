@@ -1,0 +1,366 @@
+/* ─── Design Tokens ──────────────────────────────────────────── */
+:root {
+  --bg:        #FFE8D6;
+  --surface:   #CB997E;
+  --border:    #B5845C;
+  --border-md: #A07050;
+  --accent:    #FF9F1C;
+  --accent-dark: #8B5000;
+  --accent-lt: #FFF0D4;
+  --supporting:#FFBF69;
+  --text-pri:  #3B2314;
+  --text-sec:  #5C3020;
+  --text-muted:#8B6050;
+  --success:   #2D7A4A;
+  --success-lt:#E6F4EC;
+  --warn:      #B87800;
+  --warn-lt:   #FFF3CC;
+  --error:     #C62828;
+  --error-lt:  #FDEAEA;
+  --radius-card:   10px;
+  --radius-btn:    6px;
+  --shadow-card:   0 1px 3px rgba(59,35,20,.10), 0 1px 2px rgba(59,35,20,.07);
+  --shadow-card-hover: 0 4px 12px rgba(59,35,20,.16);
+  --font-ui:   "Inter", -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  --transition: 150ms ease;
+}
+
+/* ─── Canvas ─────────────────────────────────────────────────── */
+.stApp { background: var(--bg) !important; }
+.main .block-container { padding-top: 1.5rem; max-width: 1200px; }
+html, body, [class*="css"] { font-family: var(--font-ui); color: var(--text-pri); }
+
+/* ─── Sidebar ────────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+  background: var(--surface) !important;
+  border-right: 1px solid var(--border);
+}
+[data-testid="stSidebar"] .block-container { padding-top: 1rem; }
+
+/* ─── Headings ───────────────────────────────────────────────── */
+h1 { font-size: 1.5rem !important; font-weight: 600 !important; letter-spacing: -0.02em; color: var(--text-pri) !important; }
+h2 { font-size: 1.2rem !important; font-weight: 600 !important; color: var(--text-pri) !important; }
+h3 { font-size: 1rem   !important; font-weight: 600 !important; color: var(--text-pri) !important; }
+p, li { color: var(--text-sec); line-height: 1.6; }
+
+/* ─── Buttons ────────────────────────────────────────────────── */
+div.stButton > button {
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: var(--radius-btn);
+  padding: 0.45rem 1.1rem;
+  border: 1px solid var(--border-md);
+  background: var(--surface);
+  color: var(--text-pri);
+  transition: background var(--transition), box-shadow var(--transition), transform var(--transition);
+  cursor: pointer;
+}
+div.stButton > button:hover {
+  background: var(--bg);
+  box-shadow: 0 1px 4px rgba(59,35,20,.12);
+}
+div.stButton > button:active { transform: scale(0.97); }
+
+div.stButton > button[kind="primary"] {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+div.stButton > button[kind="primary"]:hover {
+  background: #E8900A;
+  border-color: #E8900A;
+  box-shadow: 0 2px 8px rgba(255,159,28,.35);
+}
+
+/* ─── Metrics ────────────────────────────────────────────────── */
+[data-testid="stMetricValue"] {
+  font-family: var(--font-mono) !important;
+  font-size: 1.5rem !important;
+  font-weight: 600 !important;
+  color: var(--text-pri) !important;
+}
+[data-testid="stMetricLabel"] {
+  font-size: 0.78rem;
+  color: var(--text-sec);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ─── Expanders ──────────────────────────────────────────────── */
+[data-testid="stExpander"],
+[data-testid="stExpander"] details {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-card) !important;
+  background: var(--surface) !important;
+  background-color: var(--surface) !important;
+  margin-bottom: 0.5rem;
+}
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] details > summary,
+.streamlit-expanderHeader {
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+  color: var(--text-pri) !important;
+  background: var(--surface) !important;
+  background-color: var(--surface) !important;
+  padding: 0.6rem 0.8rem !important;
+}
+[data-testid="stExpander"] summary > *,
+[data-testid="stExpander"] summary span,
+[data-testid="stExpander"] summary p {
+  color: var(--text-pri) !important;
+}
+[data-testid="stExpander"] summary:hover,
+[data-testid="stExpander"] details > summary:hover {
+  background: rgba(59,35,20,.08) !important;
+  border-radius: var(--radius-card);
+}
+/* inner content */
+[data-testid="stExpander"] > div,
+[data-testid="stExpander"] details > div {
+  background: var(--surface) !important;
+  background-color: var(--surface) !important;
+}
+
+/* ─── Tabs ───────────────────────────────────────────────────── */
+[data-testid="stTabs"] [role="tablist"] {
+  border-bottom: 1px solid var(--border);
+  gap: 0.25rem;
+}
+[data-testid="stTabs"] button[role="tab"] {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-sec);
+  border-radius: 6px 6px 0 0;
+  padding: 0.5rem 0.9rem;
+  transition: color var(--transition);
+}
+[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+  color: var(--accent-dark);
+  border-bottom: 2px solid var(--accent);
+  font-weight: 600;
+}
+
+/* ─── Inputs ─────────────────────────────────────────────────── */
+[data-testid="stTextArea"] textarea,
+[data-testid="stTextInput"] input {
+  border: 1px solid var(--border-md) !important;
+  border-radius: var(--radius-btn) !important;
+  font-family: var(--font-ui) !important;
+  font-size: 0.875rem !important;
+  background-color: #FFF5EC !important;
+  color: var(--text-pri) !important;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+[data-testid="stTextArea"] textarea:focus,
+[data-testid="stTextInput"] input:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(255,159,28,.20) !important;
+  outline: none !important;
+}
+
+/* ─── Input container backgrounds ────────────────────────────── */
+[data-testid="stTextArea"] > div,
+[data-testid="stTextInput"] > div {
+  background-color: transparent !important;
+}
+[data-baseweb="textarea"],
+[data-baseweb="input"] {
+  background-color: #FFF5EC !important;
+  border-color: var(--border-md) !important;
+}
+
+/* ─── Cards ──────────────────────────────────────────────────── */
+.ds-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--transition);
+  margin-bottom: 0.75rem;
+}
+.ds-card:hover { box-shadow: var(--shadow-card-hover); }
+.ds-card-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.5rem;
+}
+
+/* ─── Banners ────────────────────────────────────────────────── */
+.ds-banner {
+  border-radius: var(--radius-btn);
+  padding: 0.75rem 1rem;
+  margin: 0.5rem 0;
+  border-left: 3px solid;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.875rem;
+}
+.ds-banner-info    { background: var(--accent-lt);  border-color: var(--accent);  color: #6B3000; }
+.ds-banner-success { background: var(--success-lt); border-color: var(--success); color: #145230; }
+.ds-banner-warning { background: var(--warn-lt);    border-color: var(--warn);    color: #6B4500; }
+.ds-banner-error   { background: var(--error-lt);   border-color: var(--error);   color: #7f1d1d; }
+.ds-banner-icon  { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+.ds-banner-body  { line-height: 1.5; }
+.ds-banner-title { font-weight: 600; display: block; margin-bottom: 2px; }
+
+/* ─── KPI Tiles ──────────────────────────────────────────────── */
+.ds-kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow-card);
+}
+.ds-kpi-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 0.35rem; }
+.ds-kpi-value { font-family: var(--font-mono); font-size: 1.75rem; font-weight: 700; color: var(--text-pri); line-height: 1; }
+.ds-kpi-pill  { display: inline-block; font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-top: 0.4rem; }
+.ds-kpi-pill-blue  { background: var(--accent-lt);  color: #7A4800; }
+.ds-kpi-pill-green { background: var(--success-lt); color: var(--success); }
+.ds-kpi-pill-amber { background: var(--warn-lt);    color: var(--warn); }
+.ds-kpi-pill-red   { background: var(--error-lt);   color: var(--error); }
+.ds-kpi-pill-gray  { background: rgba(59,35,20,.12); color: var(--text-sec); }
+
+/* ─── Step Tracker ───────────────────────────────────────────── */
+.ds-steps {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  margin: 0.75rem 0 1rem;
+}
+.ds-step-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.ds-step-done    { background: var(--success-lt); border-color: #86efac; color: var(--success); }
+.ds-step-active  { background: var(--accent-lt);  border-color: var(--accent); color: #7A4800; font-weight: 600; }
+.ds-step-pending { background: rgba(59,35,20,.06); color: var(--text-muted); border-color: var(--border); }
+.ds-step-connector { width: 20px; height: 1px; background: var(--border); flex-shrink: 0; }
+
+/* ─── Empty States ───────────────────────────────────────────── */
+.ds-empty { text-align: center; padding: 2.5rem 1rem; color: var(--text-muted); }
+.ds-empty-icon  { font-size: 2rem; margin-bottom: 0.5rem; }
+.ds-empty-title { font-size: 1rem; font-weight: 600; color: var(--text-sec); margin-bottom: 0.25rem; }
+.ds-empty-desc  { font-size: 0.85rem; line-height: 1.5; max-width: 320px; margin: 0 auto; }
+.ds-empty-hint  { margin-top: 0.75rem; font-size: 0.8rem; color: var(--accent-dark); font-weight: 500; }
+
+/* ─── Tables ─────────────────────────────────────────────────── */
+[data-testid="stDataFrame"] {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-card) !important;
+  overflow: hidden;
+}
+
+/* ─── Progress Bar ───────────────────────────────────────────── */
+[data-testid="stProgress"] > div > div {
+  background: var(--accent) !important;
+  border-radius: 999px;
+}
+[data-testid="stProgress"] > div {
+  background: var(--border) !important;
+  border-radius: 999px;
+}
+
+/* ─── Code / Mono ────────────────────────────────────────────── */
+code, pre { font-family: var(--font-mono) !important; font-size: 0.82rem; }
+
+/* ─── Divider ────────────────────────────────────────────────── */
+hr { border: none; border-top: 1px solid var(--border); margin: 1.25rem 0; }
+
+/* ─── Download buttons ───────────────────────────────────────── */
+[data-testid="stDownloadButton"] > button {
+  font-family: var(--font-ui) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  border-radius: var(--radius-btn) !important;
+  padding: 0.45rem 1.1rem !important;
+  border: 1px solid var(--border-md) !important;
+  background: var(--surface) !important;
+  background-color: var(--surface) !important;
+  color: var(--text-pri) !important;
+  cursor: pointer !important;
+}
+[data-testid="stDownloadButton"] > button:hover {
+  background: var(--bg) !important;
+  box-shadow: 0 1px 4px rgba(59,35,20,.12) !important;
+}
+[data-testid="stDownloadButton"] > button[kind="primary"] {
+  background: var(--accent) !important;
+  color: #fff !important;
+  border-color: var(--accent) !important;
+}
+
+/* ─── Code blocks — warm dark brown instead of black ─────────── */
+[data-testid="stCode"] pre,
+[data-testid="stCode"] code,
+.stCode pre,
+.stCode code {
+  background: #2A1508 !important;
+  background-color: #2A1508 !important;
+  color: #F5D5BC !important;
+  border-radius: var(--radius-card) !important;
+}
+
+/* ─── Alert overrides (softer) ───────────────────────────────── */
+[data-testid="stAlert"] {
+  border-radius: var(--radius-card) !important;
+  font-size: 0.875rem;
+}
+
+/* ─── Header / top bar ───────────────────────────────────────── */
+[data-testid="stHeader"],
+header[data-testid="stHeader"] {
+  background-color: var(--bg) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+[data-testid="stHeader"] * { color: var(--text-pri) !important; }
+/* Hide Streamlit's coloured top decoration stripe */
+[data-testid="stDecoration"] { display: none !important; }
+
+/* ─── Radio buttons ──────────────────────────────────────────── */
+[data-baseweb="radio"] [data-checked="false"] > div {
+  border-color: var(--border-md) !important;
+  background-color: transparent !important;
+}
+[data-baseweb="radio"] [data-checked="true"] > div {
+  border-color: var(--accent) !important;
+  background-color: var(--accent) !important;
+}
+[data-testid="stRadio"] label { color: var(--text-pri) !important; }
+
+/* ─── Selectbox & multiselect ────────────────────────────────── */
+[data-baseweb="select"] > div {
+  background-color: #FFF5EC !important;
+  border-color: var(--border-md) !important;
+  color: var(--text-pri) !important;
+}
+
+/* ─── Sidebar dataframe preview ──────────────────────────────── */
+[data-testid="stSidebar"] [data-testid="stDataFrame"] {
+  background: var(--surface) !important;
+}
+[data-testid="stSidebar"] [data-testid="stDataFrame"] * {
+  color: var(--text-pri) !important;
+}
+
+/* ─── Force main content backgrounds ─────────────────────────── */
+section[data-testid="stMain"],
+section[data-testid="stMain"] > div {
+  background-color: var(--bg) !important;
+}

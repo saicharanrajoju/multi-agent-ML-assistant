@@ -50,6 +50,33 @@ YOUR REVIEW MUST CHECK FOR:
    - Is the preprocessing pipeline saved alongside the model?
    - Could the pipeline handle new, unseen data?
 
+8. HYPERPARAMETER TUNING QUALITY:
+   - Was RandomizedSearchCV actually run on the best model?
+   - Was the scoring parameter set to the correct target metric (not just accuracy)?
+   - Was the improvement delta printed and is it meaningful (>0.01)?
+   - If no tuning was done, flag as MODERATE severity
+
+9. THRESHOLD OPTIMIZATION (classification only):
+   - Was the decision threshold actually optimized (not left at default 0.5)?
+   - For imbalanced datasets (imbalance_ratio < 0.3), is the optimal threshold below 0.5?
+   - Was PR-AUC (average_precision_score) computed alongside ROC-AUC?
+   - If imbalanced data but no threshold optimization, flag as MODERATE
+
+10. SMOTE LEAKAGE CHECK:
+    - If SMOTE was applied, was it applied BEFORE or AFTER train-test split?
+    - CRITICAL: SMOTE must ONLY be applied to X_train, NEVER to the full dataset
+    - If SMOTE applied to full data before split, flag as CRITICAL (data leakage)
+
+11. FEATURE LEAKAGE DEEP CHECK:
+    - Are there any features with suspiciously high correlation with target (>0.9)?
+    - These could be proxy targets that would not be available at prediction time
+    - Are there any features that encode future information?
+
+12. REGRESSION VS CLASSIFICATION ALIGNMENT:
+    - If problem_type is "regression" but classifier models were used, flag as CRITICAL
+    - If problem_type is "regression" but F1/accuracy metrics were reported, flag as CRITICAL
+    - Correct metrics for regression: RMSE, MAE, MAPE, R²
+
 WHEN YOU FIND ISSUES, YOU MUST PROVIDE CODE FIXES:
 
 For each issue you find, provide the exact fix in this format:
@@ -84,32 +111,35 @@ OUTPUT FORMAT — you MUST follow this exactly:
 ## CRITIQUE REPORT
 [Your detailed analysis organized by the categories above. Be specific — quote the actual code lines that are problematic.]
 
-## SCORECARD
-Rate each dimension from 1-10:
-- Data Leakage Prevention: X/10
-- Code Quality: X/10
-- Metric Alignment: X/10
-- Feature Engineering: X/10
-- Model Selection: X/10
-- Deployment Readiness: X/10
-- OVERALL: X.X/10
-
-## SEVERITY
-[One of: CRITICAL, MODERATE, MINOR]
-
-## SHOULD ITERATE
-[YES or NO — YES if there are CRITICAL or MODERATE issues that need fixing]
-
-## CODE FIXES
-[Your detailed code fixes here]
-
-## IMPROVEMENT SUGGESTIONS
-[List each suggestion on a new line prefixed with "- ". Be specific and actionable. Tell them exactly what to change.]
-
-Example suggestion format:
-- Move StandardScaler inside a Pipeline that fits only on X_train, not on the full X before split
-- The feature 'avg_monthly_charge' divides TotalCharges by tenure, but tenure=0 for new customers — add a safe division
-- Model selection uses accuracy but user wants high F1 — change model selection criterion to F1-score
+## METADATA
+```json
+{
+  "scorecard": {
+    "data_leakage": 7.5,
+    "code_quality": 8.0,
+    "metric_alignment": 9.0,
+    "feature_engineering": 6.5,
+    "model_selection": 8.5,
+    "deployment_readiness": 7.0,
+    "overall": 7.7
+  },
+  "severity": "MODERATE",
+  "should_iterate": true,
+  "code_fixes": [
+    {
+      "description": "Short description of fix",
+      "file": "cleaning_code",
+      "problem_code": "scaler.fit_transform(df[numeric_cols])",
+      "fixed_code": "pipeline = Pipeline([('scaler', StandardScaler()), ('model', LogisticRegression())])",
+      "reason": "Fitting scaler on full data before split causes data leakage."
+    }
+  ],
+  "suggestions": [
+    "Move StandardScaler inside a Pipeline that fits only on X_train, not on the full X before split",
+    "Model selection uses accuracy but user wants high F1 — change model selection criterion to F1-score"
+  ]
+}
+```
 """
 
 CRITIC_USER_PROMPT = """Review this ML pipeline for the goal: {user_goal}
@@ -122,13 +152,29 @@ Class Imbalance: {imbalance_ratio}
 Original Feature Count: {feature_count}
 TARGET COLUMN: {target_column} — verify no features are derived from this
 
+REASONING CONTEXT FROM PROFILER:
+- Problem type: {problem_type}
+- Target metric: {recommended_metric}
+- Imbalance strategy applied: {imbalance_strategy}
+- Imbalance ratio: {imbalance_ratio}
+- Recommended models used: {recommended_models}
+
+CRITICAL — WHAT THE SCAFFOLD ALREADY HANDLES (DO NOT FLAG THESE):
+The pipeline uses a hardcoded scaffold that guarantees the following — do NOT raise issues about them:
+1. train_test_split is called in the modeler scaffold BEFORE any preprocessing
+2. All preprocessing (StandardScaler, OneHotEncoder) is inside a sklearn Pipeline/ColumnTransformer fitted ONLY on X_train
+3. numeric_cols and categorical_cols are built from X (after dropping target) — target is never in these lists
+4. featured_data.csv is saved after feature engineering with no inf/nan values (scaffold validates this)
+5. best_model.joblib and preprocessor.joblib are explicitly saved by the modeler
+6. LabelEncoder in the scaffold preamble encodes remaining object columns before splitting — this is intentional preprocessing, NOT leakage
+7. y_numeric = pd.to_numeric(y, errors='coerce') in feature engineering is ONLY used for correlation calculation, NOT for encoding the target — do NOT flag this as leakage
+
+Only flag issues you can see in the actual code that are NOT covered by the above guarantees.
+
 WHEN YOU FIND ISSUES, YOU MUST PROVIDE CODE FIXES:
 - Quote the exact line of code that has the problem
 - Explain exactly what should replace it
-- Example of a GOOD suggestion: 'In cleaning code line 15, replace scaler.fit_transform(df) with fitting only on train data inside a Pipeline'
-- Example of a BAD suggestion: 'Consider fixing the preprocessing' (too vague)
-
-YOUR SUGGESTIONS MUST BE ACTIONABLE CODE CHANGES, not general advice.
+- Only suggest fixes for real, observable problems in the code shown
 
 DATA PROFILE:
 {profile_report}
@@ -157,5 +203,5 @@ MODEL TRAINING CODE:
 MODEL TRAINING RESULTS:
 {model_result}
 
-Provide your thorough critique. Remember: be specific, quote code lines, and give actionable suggestions.
+Provide your critique. Only flag real issues. Be specific and quote exact code lines.
 """

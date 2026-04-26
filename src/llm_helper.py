@@ -1,59 +1,123 @@
 import time
-from langchain_groq import ChatGroq
-from src.config import GROQ_API_KEY, DEFAULT_MODEL, FALLBACK_MODEL
+from src.config import (
+    GROQ_API_KEY, GROQ_API_KEYS, NVIDIA_API_KEY, NVIDIA_BASE_URL, GEMINI_API_KEY,
+    TOGETHER_API_KEY, TOGETHER_BASE_URL, TOGETHER_MODELS,
+    DEFAULT_MODEL, FALLBACK_MODEL, LLM_PROVIDER,
+    GROQ_MODELS, NVIDIA_MODELS, GEMINI_MODELS,
+)
 
 
-def get_llm(temperature=0.1, max_tokens=4096, model=None):
-    """Get an LLM instance. Tries the primary model first, falls back if rate limited."""
-    target_model = model or DEFAULT_MODEL
-    return ChatGroq(
-        api_key=GROQ_API_KEY,
-        model_name=target_model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
+def _build_llm(model_name: str, temperature: float, provider: str = None, api_key: str = None):
+    """Instantiate the correct LangChain chat model based on provider."""
+    p = provider or LLM_PROVIDER
+
+    if p == "gemini":
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        return ChatGoogleGenerativeAI(
+            google_api_key=GEMINI_API_KEY,
+            model=model_name,
+            temperature=temperature,
+        )
+    elif p == "nvidia":
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(
+            api_key=NVIDIA_API_KEY,
+            base_url=NVIDIA_BASE_URL,
+            model=model_name,
+            temperature=temperature,
+        )
+    elif p == "together":
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(
+            api_key=api_key or TOGETHER_API_KEY,
+            base_url=TOGETHER_BASE_URL,
+            model=model_name,
+            temperature=temperature,
+        )
+    else:  # groq
+        from langchain_groq import ChatGroq
+        return ChatGroq(
+            api_key=api_key or GROQ_API_KEY,
+            model_name=model_name,
+            temperature=temperature,
+        )
 
 
-def call_llm_with_fallback(messages, temperature=0.1, max_tokens=4096):
+def get_llm(temperature=0.1, model=None):
+    """Get an LLM instance using the configured provider."""
+    return _build_llm(model or DEFAULT_MODEL, temperature)
+
+
+def call_llm_with_fallback(messages, temperature=0.1):
     """
-    Call the LLM with automatic fallback on rate limit errors.
+    Call the LLM with automatic cross-provider fallback on rate limit errors.
 
-    Tries the primary model (70B) first.
-    If it gets a 429 rate limit error, automatically retries with the fallback model (8B).
-    Also implements a simple retry with backoff for transient errors.
+    Cascade order:
+      - If LLM_PROVIDER=gemini:  gemini-2.0-flash → gemini-1.5-flash → groq-70b → groq-8b
+      - If LLM_PROVIDER=groq:    groq-70b → groq-8b
+      - If LLM_PROVIDER=nvidia:  nvidia-70b → nvidia-8b → groq-8b
 
-    Returns: (response, model_used)
+    Returns: (response, model_used_string)
     """
-    models_to_try = [DEFAULT_MODEL, FALLBACK_MODEL]
 
-    for model_name in models_to_try:
-        for attempt in range(3):  # 3 retries per model
+    def _is_rate_limit(error_str: str) -> bool:
+        return any(x in error_str for x in ["429", "rate_limit", "rate limit", "RESOURCE_EXHAUSTED", "quota"])
+
+    groq_primary_key = GROQ_API_KEYS[0] if GROQ_API_KEYS else None
+
+    if LLM_PROVIDER == "together":
+        cascade = [
+            ("together", TOGETHER_MODELS["primary"],   None),
+            ("together", TOGETHER_MODELS["fallback"],  None),
+            ("together", TOGETHER_MODELS["fallback2"], None),
+            ("together", TOGETHER_MODELS["fallback3"], None),
+        ]
+    elif LLM_PROVIDER == "gemini":
+        cascade = [
+            ("gemini", GEMINI_MODELS["primary"],  None),
+            ("gemini", GEMINI_MODELS["fallback"],  None),
+            ("groq",   GROQ_MODELS["primary"],     groq_primary_key),
+            ("groq",   GROQ_MODELS["fallback"],    groq_primary_key),
+        ]
+    elif LLM_PROVIDER == "nvidia":
+        cascade = [
+            ("nvidia", NVIDIA_MODELS["primary"],  None),
+            ("nvidia", NVIDIA_MODELS["fallback"],  None),
+            ("groq",   GROQ_MODELS["fallback"],    groq_primary_key),
+        ]
+    else:  # groq — rotate through all available keys before falling back to 8b
+        cascade = []
+        for key in GROQ_API_KEYS:
+            cascade.append(("groq", GROQ_MODELS["primary"], key))
+        for key in GROQ_API_KEYS:
+            cascade.append(("groq", GROQ_MODELS["fallback"], key))
+
+    last_error = None
+    for entry in cascade:
+        provider, model_name = entry[0], entry[1]
+        api_key = entry[2] if len(entry) > 2 else None
+        label = f"{provider}/{model_name}"
+        for attempt in range(2):
             try:
-                llm = ChatGroq(
-                    api_key=GROQ_API_KEY,
-                    model_name=model_name,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
+                llm = _build_llm(model_name, temperature, provider=provider, api_key=api_key)
                 response = llm.invoke(messages)
-                print(f"  ✅ LLM call successful (model: {model_name})")
-                return response, model_name
+                print(f"  ✅ LLM call successful [{label}]")
+                return response, label
+
             except Exception as e:
                 error_str = str(e)
-                if "429" in error_str or "rate_limit" in error_str.lower():
-                    if model_name == DEFAULT_MODEL:
-                        print(f"  ⚠️ Rate limited on {model_name}, switching to fallback...")
-                        break  # Break retry loop, try next model
-                    else:
-                        wait_time = 30 * (attempt + 1)
-                        print(f"  ⚠️ Rate limited on fallback too. Waiting {wait_time}s...")
-                        time.sleep(wait_time)
-                else:
-                    if attempt < 2:
-                        wait_time = 5 * (attempt + 1)
-                        print(f"  ⚠️ LLM error (attempt {attempt+1}): {error_str[:100]}. Retrying in {wait_time}s...")
-                        time.sleep(wait_time)
-                    else:
-                        raise Exception(f"LLM failed after 3 attempts on {model_name}: {error_str}")
+                last_error = error_str
 
-    raise Exception("All LLM models exhausted. Please wait for rate limits to reset.")
+                if _is_rate_limit(error_str):
+                    print(f"  ⚠️ Rate limited [{label}] — trying next in cascade...")
+                    break
+                else:
+                    if attempt == 0:
+                        wait = 5
+                        print(f"  ⚠️ LLM error [{label}] attempt {attempt+1}: {error_str[:80]}. Retrying in {wait}s...")
+                        time.sleep(wait)
+                    else:
+                        print(f"  ❌ [{label}] failed twice, moving to next cascade option...")
+                        break
+
+    raise Exception(f"All models in cascade exhausted. Last error: {last_error}")

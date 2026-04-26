@@ -5,6 +5,12 @@ from src.agents.modeler import modeler_node
 from src.agents.critic import critic_node
 
 initial_state = {
+    "problem_type": "binary_classification",
+    "recommended_metric": "f1",
+    "reasoning_context": {
+        "imbalance_strategy": "class_weight_balanced",
+        "recommended_models": ["LogisticRegression", "RandomForestClassifier", "XGBClassifier", "LGBMClassifier"],
+    },
     "dataset_path": "datasets/WA_Fn-UseC_-Telco-Customer-Churn.csv",
     "user_goal": "Predict customer churn with high F1-score and low false positive rate",
     "messages": [],
@@ -33,7 +39,7 @@ critic_result = critic_node(state)
 print("\n" + "="*60)
 print("CRITIC RESULTS")
 print("="*60)
-print(f"Severity: {critic_result.get('improvement_suggestions', [])}")
+print(f"Severity/Scorecard: {critic_result.get('scorecard', {})}")
 print(f"Should iterate: {critic_result.get('should_iterate', False)}")
 print(f"Iteration count: {critic_result.get('iteration_count', 0)}")
 print(f"\nSuggestions:")
