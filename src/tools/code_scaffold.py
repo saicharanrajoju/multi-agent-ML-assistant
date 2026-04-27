@@ -119,6 +119,13 @@ print(f"Input: {{X.shape[1]}} features | {{len(numeric_cols)}} numeric | {{len(c
 # SCAFFOLD — validate & save
 X = X.replace([np.inf, -np.inf], np.nan)
 X = X.fillna(X.median(numeric_only=True))
+# Fallback: if median itself was NaN (all-null column), fill with 0
+for _col in X.select_dtypes(include='number').columns:
+    if X[_col].isnull().any():
+        X[_col] = X[_col].fillna(0)
+# Fill any remaining object columns
+for _col in X.select_dtypes(include='object').columns:
+    X[_col] = X[_col].fillna('unknown')
 
 assert TARGET_COL not in X.columns, f"LEAKAGE: '{{TARGET_COL}}' ended up in feature matrix!"
 _nulls = X.isnull().sum().sum()
