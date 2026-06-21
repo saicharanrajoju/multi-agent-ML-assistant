@@ -1,7 +1,6 @@
 # Multi-Agent ML Assistant
 
 An autonomous, human-in-the-loop machine learning pipeline built with LangGraph and Streamlit. Upload a CSV, describe your goal, and a team of specialized AI agents profiles, cleans, engineers features, trains models, and critiques the results — pausing at each stage for your review and approval.
-
 ---
 
 ## Key Features
